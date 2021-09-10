@@ -485,3 +485,39 @@ end
 
 ## 第8章 编译·运行·错误信息
 Lua会先将代码预编译成中间码然后再执行
+
+load() 中将每个chunk都作为一个匿名函数处理
+```lua
+local f = function () i = i + 1; end; --- 等同于
+local f = load("i = i + 1;");
+```
+
+执行load() 之后，chunk 被编译了但还没有被定义，只有运行chunk 才是定义。
+
+函数的定义是发生在运行时的赋值而不是编译时
+
+load编译时不关心词法范围，使用全局变量
+
+require和dofile完成相同的功能但有两点不同
+- require 会搜索目录加载文件
+- require 会避免加载同一文件
+
+require的路径是一个模式列表，每一个模式指明一个虚文件名转成实文件名的方法。匹配时会将文件名代替 `?`
+虚文件名样例 `?;?.lua`
+调用 `require(l)` 会尝试打开文件 `l;l.lua`
+
+动态链接库 `package.loadlib(libname, funcname);`
+
+自定义错误 `error("My Error")` 
+`assert()` assert 会先处理两个参数，然后才调用函数。第一个参数若没问题，则不做任何事情，第二个参数为错误信息。
+
+异常和错误处理
+```lua
+--- pcall在保护模式下执行函数内容，同时捕获所有的异常和错误
+--- 若一切正常，pcall返回true以及 被执行函数的返回值；否则返回nil和错误信息
+--- 错误信息不一定仅为字符串
+local status, err = pcall(function () error({code = 121}); end);
+print(err.code)
+```
+
+pcall 返回错误信息时，已经释放了保存错误发生情况的栈信息。xpcall接受两个参数：调用函数、错误处理函数。xpacll在栈释放以前调用错误处理函数。debug.debug能查看错误发生时的情况，debug.traceback能创建更多的错误信息。
