@@ -249,7 +249,7 @@ hello	world	nil	?
 用表作为函数的唯一参数，可通过表索引指定参数
 
 ## 第6章 再论函数
-函数时带有词法定界的第一类值
+函数是带有词法定界的第一类值
 > **第一类值指**：函数和其他值（number，string）一样，可存为变量，放在表中，作为形参，作为函数返回值
 **词法定界指**：嵌套的函数可以访问他外部函数中的变量
 
@@ -521,3 +521,320 @@ print(err.code)
 ```
 
 pcall 返回错误信息时，已经释放了保存错误发生情况的栈信息。xpcall接受两个参数：调用函数、错误处理函数。xpacll在栈释放以前调用错误处理函数。debug.debug能查看错误发生时的情况，debug.traceback能创建更多的错误信息。
+
+## 第9章 协同程序
+在任一指定时刻只有一个协同程序在运行
+
+协同基础
+```lua
+--- 创建协同，成功则返回thread类型
+co = coroutine.create(function ()
+    print("hi");
+end )
+print(co) --> thread: 0000000000e5ca98
+
+--- 协同有三个状态：挂起态、运行态、停止态
+--- 刚创建成功时，为挂起态
+print(coroutine.status(co)) --> suspended
+--- 由挂起态变为运行态
+coroutine.resume(co); --> hi
+--- 任务完成，进入停止态
+print(coroutine.status(co)) --> dead
+--- yield函数将正在运行的代码挂起
+co = coroutine.create(function ()
+    for i = 1, 2 do
+        print("co", i);
+        coroutine.yield();
+    end
+end)
+coroutine.resume(co); --> co	1
+print(coroutine.status(co)); --> suspended
+coroutine.resume(co); --> co	2
+print(coroutine.resume(co)); --> true
+--- 激活终止态协程会得到错误
+print(coroutine.resume(co)); --> false	cannot resume dead coroutine
+--- resume运行在保护模式下，如果协程内部存在错误，Lua并不会抛出错误，而是将错误返回给resume函数
+
+--- 通过resume-yield来交换数据,数据由yield传给resume
+co = coroutine.create(function (a, b, c)
+    print("co", a, b, c);
+    coroutine.yield(a + 1, b + 2, c + 3)
+end );
+res, a, b, c = coroutine.resume(co, 1, 2, 3); --> co	1	2	3
+print(a, b, c) --> 2	4	6
+--- Lua的协同为不对称协同
+```
+
+生产者-消费者
+```lua
+--- 消费者驱动类型
+function producer()
+    while true do
+        local x = io.read();
+        send(x);
+    end
+end
+
+function consumer()
+    while true do
+        local x = receive();
+        io.write(x, "\n");
+    end
+end
+
+function receive()
+    local status, value = coroutine.resume(producer);
+    return value;
+end
+function send(x)
+    coroutine.yield(x);
+end
+```
+
+用作迭代器的协同
+```lua
+--- 生成全排列
+function permgen(a, n)
+    if n == 0 then
+        coroutine.yield(a);
+    end
+    for i = 1, n do
+        a[n], a[i] = a[i], a[n]
+        permgen(a, n - 1)
+        a[n], a[i] = a[i], a[n]
+    end
+end
+--- 定义迭代工厂
+function perm(a)
+    local n = #a;
+    local co = coroutine.create(function () permgen(a, n) end)
+    return function ()
+        local code, res = coroutine.resume(co);
+        return res;
+    end
+end
+for p in perm({"a", "b", "c"}) do
+    printResult(p); --- 自行实现打印表
+end
+```
+
+用轮询和及时中断的方法解决协程的阻塞问题
+
+## 第11章 数据结构
+table是Lua中唯一的数据结构
+
+```lua
+--- 数组
+a = {1, 2, 3};
+a = {{1, 1, 1}, {2, 2, 2}};
+--- 链表
+list = {next = list, value = v};
+--- 队列和双向队列
+Queue = {}
+function Queue.new()
+    return {first = 0, last = -1};
+end
+function Queue.pushLeft(queue, value)
+    local first = queue.first - 1;
+    queue.first = first;
+    queue[first] = value;
+end
+function Queue.pushRight(queue, value)
+    local last = queue.last + 1;
+    queue.last = last;
+    queue[last] = value;
+end
+function Queue.popLeft(queue)
+    local first = queue.first;
+    if first > queue.last then
+        error("list is empty");
+    end
+    local value = queue[first];
+    queue[first] = nil;
+    queue.first = first + 1;
+    return value;
+end
+function Queue.popRight(queue)
+    local last = queue.last;
+    if queue.first > queue.last then
+        error("list is empty");
+    end
+    local value = queue[last];
+    queue[last] = nil;
+    queue.last = last - 1;
+    return value;
+end
+a = Queue.new();
+Queue.pushLeft(a, 3)
+Queue.pushLeft(a, 4)
+for i, val in pairs(a) do
+    print(i, val)
+end
+--[[
+last	-1
+-1	3
+-2	4
+first	-2
+--]]
+--- 集合
+function Set(list)
+    local set = {};
+    for _, val in pairs(list) do
+        set[val] = true;
+    end
+    return set;
+end
+reserved = Set({"a", "a", "a", "b"})
+for _, val in pairs(reserved) do
+    print(_);
+end
+--[[
+a
+b
+--]]
+```
+
+table.concat(t, "\n") 以换行符为分隔符连接table中的字符串
+
+## 第12章 数据文件与持久化
+以安全的方式引用任意字符串
+```lua
+function serialize(o)
+    if type(o) == "string" then
+        io.write(string.format("%q", o));
+    end
+end
+serialize("[]") --> "[]"
+```
+
+保存不带循环的table，带循环的递归记录出现过的值即可
+```lua
+function serialize(o)
+    if type(o) == "number" then
+        io.write(o);
+    elseif type(o) == "string" then
+        io.write(string.format("%q", o));
+    elseif type(o) == "table" then
+        io.write("{\n");
+        for k, v in pairs(o) do
+            io.write(string.format(" [%q] = ", k));
+            serialize(v);
+            io.write(",\n");
+        end
+        io.write("}");
+    else
+        error("cannot serialize a " .. type(o));
+    end
+end
+serialize({a = 12, b = "Lua", 3, {"b"}})
+--[[
+{
+ [1] = 3,
+ [2] = {
+ [1] = "b",
+},
+ ["a"] = 12,
+ ["b"] = "Lua",
+}
+--]]
+```
+
+## 第13章 Metatables and Metamethods
+Metatables允许改变table的行为。Lua中每个表都可以有Metatable，默认为无
+```lua
+a = {};
+b = {};
+setmetatable(a, b); --- b 为 a的metatable
+assert(getmetatable(a) == b)
+```
+
+表也可以是自身的metatable，用来描述私有行为
+
+算术运算的Metamethods
+```lua
+--- 集合并
+Set = {}
+Set.mt = {}
+function Set.new(t)
+    local set = {}
+    setmetatable(set, Set.mt);
+    for _, val in pairs(t) do
+        set[val] = true;
+    end
+    return set;
+end
+
+function Set.union(a, b)
+   local res = Set.new({});
+    for k in pairs(a) do res[k] = true; end
+    for k in pairs(b) do res[k] = true; end
+    return res;
+end
+
+function Set.intersection(a, b)
+    local res = Set.new({})
+    for k in pairs(a) do
+        res[k] = b[k];
+    end
+    return res;
+end
+
+function Set.tostring(set)
+    local ret = {};
+    for k in pairs(set) do
+        table.insert(ret, k);
+    end
+    return "{" .. table.concat(ret, " ") .. "}"
+end
+
+function Set.print(s)
+    print(Set.tostring(s));
+end
+
+a = Set.new({"a", "b", "c", 1});
+b = Set.new({1, 2});
+print(getmetatable(a), getmetatable(b)) --> table: 0000000000e59060	table: 0000000000e59060
+
+--- 给metatable增加__add函数，并集
+Set.mt.__add = Set.union;
+Set.print(a + b); --> {1 b c 2 a}
+--- 相乘运算定义交集操作
+Set.mt.__mul = Set.intersection;
+Set.print((a + b) * b); --> {1 2}
+--- 其他运算符，__sub(-), __div(/), __unm(-), __pow(^), __concat(连接)
+
+--- 当两个操作数有不同的metatable，按参数先后顺序查找__add域，并将第一个找到的__add域作为metamethod
+--- Lua不关心混合类型，无法运算将报错
+```
+
+关系运算符的Metamethods
+```lua
+--- 关系运算符__eq(==), __lt(<), __le(<=)
+Set.mt.__le = function (a, b)
+    for k in pairs(a) do
+        if not b[k] then return false; end
+    end
+    return true;
+end
+
+Set.mt.__lt = function (a, b)
+    return a <= b and not (b <= a);
+end
+
+Set.mt.__eq = function (a, b)
+    return a <= b and b <= a;
+end
+```
+
+库自定义的Metamethods
+```lua
+--- print函数总是调用tostring来格式化输出
+Set.mt.__tostring = Set.tostring;
+print(a); --> {1 a b c}
+--- setmetatable/getmetatable函数也会使用metafield，可以设置__metatable的值隐藏metatable
+Set.mt.__metatable = "not your business";
+print(getmetatable(a)) --> not your business
+setmetatable(a, {}); --> error
+```
+
+## 第14章 环境
