@@ -1495,3 +1495,706 @@ end
 ```
 
 ## 第22章 操作系统库
+```lua
+print(os.time({year = 2001, month = 1, day = 1}))
+
+--- 还有其他格式
+print(os.date("*t", 0).year)
+print(os.date("%x", 0))
+
+print(os.clock() - os.clock())
+```
+
+```lua
+--- 打印环境变量
+print(os.getenv("Path"));
+
+--- os.exit 终止程序执行
+
+--- 命令行
+os.execute("ping 127.0.0.1");
+```
+
+## 第23章 Debug库
+应该尽可能少使用debuf库
+- debuf库中的一些函数性能较低
+- 破坏了语言的一些真理
+
+debug库组成：自省（introspective）函数和hooks。自省函数可以检查运行程序的某些方面，Hooks可以跟踪程序的执行情况
+```lua
+local t = 1;
+--- 自省函数，第一个参数可以是函数或者栈级别
+--- 当t为C函数时，Lua无法知道很多相关的信息
+info = debug.getinfo(t);
+print(info.what)
+```
+
+访问局部变量
+```lua
+function foo(a, b)
+    local x;
+    do local c = a - b; end
+    local a = 1;
+    while true do
+        --- 传参：要查询的函数的栈级别，变量的索引
+        local name, value = debug.getlocal(1, a)
+        if not name then break end
+        print(name, value);
+        a = a + 1;
+    end
+end
+foo(10, 20)
+--[[
+a	10
+b	20
+x	nil
+a	4
+--]]
+```
+
+使用debug.getupvalue()访问Upvalues
+- 即使函数不在活动状态也依然有upvalues
+- getupvalue的第一个参数是一个闭包，第二个参数为upvalue的索引
+- 可以使用debug.setupvalue()修改upvalues
+
+hook机制：注册一个函数，用来在程序运行中某一事件到达时被调用。
+四种触发hook的事件
+- 调用函数时发生call事件
+- 函数返回时发生return事件
+- Lua开始执行代码新行，发生line事件
+- 运行指定数目的指令后，发生count事件
+```lua
+--- 第一个参数为hook函数，第二个参数为监控事件的字符串，有call, return, line事件
+--- 关闭hooks，debug.sethook()
+debug.sethook(print, "l")
+print(3)
+print("a")
+--[[
+line	8
+3
+line	9
+a
+--]]
+```
+
+```lua
+Counters = {}
+Names = {}
+
+function hook()
+    local f = debug.getinfo(2, "f").func
+    if Counters[f] == nil then
+        Counters[f] = 1;
+        Names[f] = debug.getinfo(2, "Sn");
+    else
+        Counters[f] = Counters[f] + 1;
+    end
+end
+
+function getname(func)
+    local n = Names[func]
+    if n.what == "C" then
+        return n.name
+    end
+    local loc = string.format("[%s]:%s", n.short_src, n.linedefined)
+    if n.namewhat ~= "" then
+        return string.format("%s (%s)", loc, n.name);
+    else
+        return string.format("%s", loc);
+    end
+end
+
+--- 计算运行过程中，每个函数调用的次数
+debug.sethook(hook, "c");
+function Test()
+    local n = 0;
+    return function ()
+        n = n + 1;
+    end
+end
+addn = Test();
+addn();
+addn();
+debug.sethook();
+for func, count in pairs(Counters) do
+    print(getname(func), count);
+end
+```
+
+## 第24章 C API纵览（自己生成库去链接Lua）
+API中的大部分函数并不检查参数的正确性，在调用偶函数之前必须确保参数是有效的。
+
+在C和Lua之间通信关键内容在于一个虚拟的栈。几乎所有的API调用都是对栈上的值进行操作，所有C与Lua之间的数据交换也都通过这个栈来完成。
+
+```cpp
+#include <iostream>
+#include <lua.hpp>
+
+int main()
+{
+	char buff[256];
+	int error;
+	// newstate创建新的空环境
+	lua_State* L = luaL_newstate();
+	luaopen_base(L);
+	luaopen_table(L);
+	luaopen_io(L);
+	luaopen_string(L);
+	luaopen_math(L);
+
+	while (fgets(buff, sizeof(buff), stdin) != nullptr) {
+		// luaL_loadbuffer编译Lua代码，若正确，把编译之后的chunk压入栈
+		// lua_pcall会把chunk从栈中弹出并在保护模式下运行它
+		// 若发生错误，这两个函数都将一条错误消息压入栈
+		// Lua核心绝不会直接输出任何东西到任务输出流上，而是通过返回错误代码和错误信息来发出错误信号
+		error = luaL_loadbuffer(L, buff, strlen(buff), "line") || lua_pcall(L, 0, 0, 0);
+		if (error) {
+			fprintf(stderr, "%s", lua_tostring(L, -1));
+			lua_pop(L, 1);
+			break;
+		}
+	}
+	lua_close(L);
+	return 0;
+}
+```
+
+Lua用一个抽象的栈与C之间交换值。栈中每条记录都可以保存任何Lua值。
+向Lua请求一个值时，调用Lua，被请求的值会被压入栈。向Lua传递一个值时，先将这个值压入栈，然后调用Lua，该值将被弹出。
+
+Lua中的字符串不是以0为结束符的，它依赖于一个明确的长度
+
+Lua自身保存所有的字符串，所以可以释放C的缓冲区
+
+```cpp
+// 压入元素
+lua_pushnil(lua_State *L);
+lua_pushlstring(lua_State *L, const char* s, size_t length);
+// ...
+// 检查栈空间
+int lua_checkstack(lua_State* L, int sz); 
+
+//查询元素
+int lua_is...(lua_State* L, int index);
+lua_toboolean(lua_State* L, int index);
+lua_tostring(lua_State* L, int index);
+// 即使类型不正确，对于number，strlen，bool都会返回0，其他为NULL
+// lua_tostring返回的字符串以0结尾，但是字符串中间也可能包含0
+
+// 其他堆栈操作自己查
+// lua_settop 指定栈的大小
+lua_settop(L, 0); // 清空堆栈
+lus_replace(L, 3); // 弹出栈顶元素并设置到指定索引位置
+```
+
+永远不要将指向Lua字符串的指针保存到访问他们的外部函数中，因为它可能会被清理掉
+
+## 第25章 扩展你的程序
+```cpp
+/* 表查询 */
+// background={r=0.3,g=0.1,b=0};
+int getfield(lua_State* L, const char* key) {
+	lua_pushstring(L, key);
+	// 参数为table栈中的位置为参数，将栈顶作为key值，返回对应的value到栈顶
+	lua_gettable(L, -2);
+	if (!lua_isnumber(L, -1)) {
+		std::cerr << "invalid component in background color" << std::endl;
+	}
+	int result = (int)lua_tonumber(L, -1) * 255;
+	// remove number
+	lua_pop(L, 1);
+	return result;
+}
+
+void getcolor(lua_State* L) {
+	// 检查table
+	lua_getglobal(L, "background");
+	if (!lua_istable(L, -1)) {
+		puts("'background' is not a valid color table");
+	}
+	else {
+		int red = getfield(L, "r");
+		int green = getfield(L, "g");
+		int blue = getfield(L, "b");
+		printf("%d %d %d\n", red, green, blue);
+	}
+}
+
+/* ===================================== */
+/* 表添加 */
+
+#define MAX_COLOR 255
+
+struct ColorTable {
+	const char* name;
+	unsigned char red, green, blue;
+}colortable[] = {
+	{"WHITE", MAX_COLOR, MAX_COLOR, MAX_COLOR},
+	{"RED", MAX_COLOR, 0, 0}
+};
+
+void setfield(lua_State* L, const char* index, int value) {
+	lua_pushstring(L, index);
+	lua_pushnumber(L, double(value) / 255.0);
+	// 以table在栈中的索引作为参数，将栈中的key和value出栈，用这两个值修改table
+	lua_settable(L, -3);
+}
+
+void setcolor(lua_State* L, ColorTable* ct) {
+	lua_newtable(L);
+	setfield(L, "r", ct->red);
+	setfield(L, "g", ct->green);
+	setfield(L, "b", ct->blue);
+	// 将table出栈并将其赋予一个全局变量名
+	lua_setglobal(L, ct->name);
+}
+```
+
+表操作的完整测试程序，部分代码略有修改，并尝试调用lua文件
+```lua
+background = {r = 0.3, g = 0.1, b = 0}
+print(background.r, background.g, background.b)
+```
+```cpp
+#include <iostream>
+#include <lua.hpp>
+
+/* 表查询 */
+double getfield(lua_State* L, const char* key) {
+	lua_pushstring(L, key);
+	// 参数为table栈中的位置为参数，将栈顶作为key值，返回对应的value到栈顶
+	lua_gettable(L, -2);
+	if (!lua_isnumber(L, -1)) {
+		std::cerr << "invalid component in background color" << std::endl;
+		printf("%d\n", lua_type(L, -1));
+	}
+	double result = lua_tonumber(L, -1) * 255;
+	// remove number
+	lua_pop(L, 1);
+	return result;
+}
+
+void getcolor(lua_State* L, const char* colorName) {
+	// 检查table
+	lua_getglobal(L, colorName);
+	if (!lua_istable(L, -1)) {
+		puts("'colorName' is not a valid color table");
+	}
+	else {
+		int red = getfield(L, "r");
+		int green = getfield(L, "g");
+		int blue = getfield(L, "b");
+		printf("%d %d %d\n", red, green, blue);
+	}
+}
+
+/* ===================================== */
+/* 表添加 */
+
+#define MAX_COLOR 255
+
+struct ColorTable {
+	const char* name;
+	unsigned char red, green, blue;
+}colortable[] = {
+	{"WHITE", MAX_COLOR, MAX_COLOR, MAX_COLOR},
+	{"RED", MAX_COLOR, 0, 0}
+};
+
+void setfield(lua_State* L, const char* index, int value) {
+	lua_pushstring(L, index);
+	lua_pushnumber(L, double(value) / 255.0);
+	// 以table在栈中的索引作为参数，将栈中的key和value出栈，用这两个值修改table
+	lua_settable(L, -3);
+}
+
+void setcolor(lua_State* L, ColorTable* ct) {
+	lua_newtable(L);
+	setfield(L, "r", ct->red);
+	setfield(L, "g", ct->green);
+	setfield(L, "b", ct->blue);
+	// 将table出栈并将其赋予一个全局变量名
+	lua_setglobal(L, ct->name);
+}
+
+int main()
+{
+	char buff[256];
+	int error;
+
+	lua_State* L = luaL_newstate();
+	luaopen_base(L);
+	luaopen_table(L);
+	luaopen_io(L);
+	luaopen_string(L);
+	luaopen_math(L);
+
+	while (fgets(buff, sizeof(buff), stdin) != nullptr) {
+		error = luaL_loadbuffer(L, buff, strlen(buff), "line") || lua_pcall(L, 0, 0, 0);
+		if (error) {
+			fprintf(stderr, "%s", lua_tostring(L, -1));
+			lua_pop(L, 1);
+			break;
+		}
+
+		getcolor(L, "background");
+		setcolor(L, &colortable[0]);
+		getcolor(L, colortable[0].name);
+
+		luaL_dofile(L, "./test.lua");
+	}
+	lua_close(L);
+	return 0;
+}
+```
+
+使用API调用函数的过程
+- 先将被调用的函数入栈
+- 依次将所有参数入栈
+- 使用lua_pcall调用函数
+- 从栈中获取函数返回结果
+
+```lua
+function f(x, y)
+    return (x ^ 2 * math.sin(y)) / (1 - x);
+end
+print(f(3, 4))
+```
+```cpp
+#include <iostream>
+#include <lua.hpp>
+
+// 调用lua函数
+double f(lua_State* L, const double& x, const double& y) {
+	lua_getglobal(L, "f");
+	lua_pushnumber(L, x);
+	lua_pushnumber(L, y);
+
+	// 2 arguments, 1 result，第四个参数可以指定一个错误处理函数
+	// 如果返回多个结果，结果按前后顺序入栈
+	// 运行错误时，会调用错误处理函数，若没有则将错误信息入栈
+	if (lua_pcall(L, 2, 1, 0) != 0) {
+		printf("error running funciton 'f':%s\n", lua_tostring(L, -1));
+	}
+	else {
+		if (!lua_isnumber(L, -1)) {
+			std::cerr << "function 'f' must return a number" << std::endl;
+			return 0;
+		}
+		double res = lua_tonumber(L, -1);
+		lua_pop(L, 1);
+		return res;
+	}
+}
+
+int main()
+{
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+
+	luaL_dofile(L, "./test.lua");
+
+	double d = f(L, 3, 4);
+	printf("%lf\n", d);
+
+	lua_close(L);
+	return 0;
+}
+```
+
+## 第26章 调用C函数
+Lua与C交互的栈不是全局变量，每个函数都有自己的私有栈。当Lua调用C函数时，第一个参数总是在这个私有栈的index=1的位置。
+
+C函数
+```lua
+print(mysin(1), mysin(3));
+print(mysin("mysin"))
+```
+```cpp
+#include <iostream>
+#include <lua.hpp>
+
+// 任何在Lua中注册的函数必须有相同的原型，该原型为lua_CFunction
+// 返回表示返回值个数的数字
+// 函数返回后，Lua自动清除栈中返回结果下面的所有内容
+int l_sin(lua_State* L) {
+	double d = luaL_checknumber(L, 1);
+	lua_pushnumber(L, std::sin(d));
+	lua_pushstring(L, "mySin");
+	return 2;
+}
+
+int main()
+{
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+
+	lua_pushcfunction(L, l_sin);
+	lua_setglobal(L, "mysin");
+	luaL_dofile(L, "./test.lua");
+
+	lua_close(L);
+	return 0;
+}
+```
+
+```lua
+print(l_sin(1), l_cos(3));
+```
+```cpp
+#include <iostream>
+#include <lua.hpp>
+
+// 使用register注册函数
+static int l_sin(lua_State* L) {
+	double d = luaL_checknumber(L, 1);
+	lua_pushnumber(L, std::sin(d));
+	lua_pushstring(L, "mySin");
+	return 2;
+}
+
+static int l_cos(lua_State* L) {
+	double d = luaL_checknumber(L, 1);
+	lua_pushnumber(L, std::cos(d));
+	lua_pushstring(L, "myCos");
+	return 2;
+}
+
+int main() {
+	lua_State* L = luaL_newstate();
+	luaL_openlibs(L);
+
+	// 将指定的函数注册为lua 的全局函数变量
+	// 第二个参数为调用C函数时使用的全局函数名
+	// 第三个参数为实际C函数指针
+	lua_register(L, "l_sin", l_sin);
+	lua_register(L, "l_cos", l_cos);
+
+	luaL_dofile(L, "test.lua");
+
+	lua_close(L);
+	return 0;
+}
+```
+
+编写C函数库
+```c
+// 导出为dll，与lua.dll放在同一文件下，在cmd中可调用
+// 注意luaopen_XXX，XXX.dll，两部分XXX要一致
+#include "build_dll/include/lua.hpp"
+#include <math.h>
+#pragma comment(lib, "build_dll/lua.lib")
+
+extern "C" static int l_sin(lua_State * L) {
+	double d = luaL_checknumber(L, 1);
+	lua_pushnumber(L, sin(d));
+	lua_pushstring(L, "mysin");
+	return 2;
+}
+
+extern "C" __declspec(dllexport)
+int luaopen_dlltest(lua_State * L) {
+	luaL_Reg l[] = {
+		{"l_sin", l_sin},
+		{NULL, NULL}
+	};
+	luaL_newlib(L, l);
+	return 1;
+}
+```
+
+## 第27章 撰写C函数的技巧
+```cpp
+// 使用lua_rawgeti(lua_State* L, int index, int key) 和
+//     lua_rawseti(lua_State* L, int index, int key) 直接操作数组中的元素
+// index指向table在栈中的位置，key指向元素在table中的位置
+
+// 使table[i] = f(table[i])
+int l_map(lua_State* L) {
+	luaL_checktype(L, 1, LUA_TTABLE);
+
+	luaL_checktype(L, 2, LUA_TFUNCTION);
+
+	int n = luaL_len(L, 1); // 获取table长度
+	
+	for (int i = 1; i <= n; ++i) {
+		lua_pushvalue(L, 2);  // push function
+		lua_rawgeti(L, 1, i); // push t[i]
+		lua_call(L, 1, 1);    // call f(t[i])
+		lua_rawseti(L, 1, i); // t[i] = result
+	}
+
+	return 0;
+}
+
+// C实现 split("hi,,there", ",") 函数，返回表{"hi", "there"}
+int l_split(lua_State* L) {
+	const char* s = luaL_checkstring(L, 1);
+	const char* sep = luaL_checkstring(L, 2);
+	int i = 0;
+
+	lua_newtable(L); // 创建table存放result
+
+	const char* e;
+	while ((e = strchr(s, *sep)) != nullptr) {
+		lua_pushlstring(L, s, e - s); // push substring
+		lua_rawseti(L, -2, ++i); // table的位置在 -2，substring的索引为++i
+		s = e + 1; // skip separator
+	}
+
+	// push last substring
+	lua_pushstring(L, s);
+	lua_rawseti(L, -2, ++i);
+
+	return 1;
+}
+
+// lua API还提供了lua_concat(), lua_pushfstring()来处理字符串
+// 使用buffer实现string.upper
+// 
+// 访问buffer时，其他用途的操作进行的push/pop操作必须平衡
+// 所以无法进行下列操作: luaL_addstring(&b, lua_tostring(L, 1));
+// 对此，提供了特殊函数来将栈顶的值放入buffer: luaL_addvalue (luaL_Buffer *B);
+
+int str_upper(lua_State* L) {
+	luaL_Buffer b;
+	// 初始化后，buffer保留了一份状态L的拷贝，因此其他操作buffer函数的时候不需要传递L
+	luaL_buffinit(L, &b);
+
+	size_t l;
+	const char* s = luaL_checklstring(L, 1, &l);
+
+	for (int i = 0; i < l; ++i) {
+		luaL_addchar(&b, std::toupper((unsigned char)(s[i])));
+	}
+	luaL_pushresult(&b);
+	return 1;
+}
+```
+
+当C函数接受一个来自lua的字符串作为参数时，不要将正在被访问的字符串出栈，不要修改字符串
+
+当C函数需要创建一个字符串返回给lua时，需要由C来负责缓冲区的分配和释放，负责处理缓冲溢出等情况
+
+Lua提供了名为registry的表，用来保存C函数的全局变量。C代码可以自由使用，Lua代码不能访问
+
+```cpp
+	// registry全局注册表位于由LUA_REGISTRYINDEX定义的值对应的假索引位置
+	// 假索引除了对应的值不在栈中，其他都类似于栈中的索引
+	static const char key = 'k';
+
+	// 存数字，将static的地址作为key，防止命名冲突
+	// lua_pushlightuserdata将一个表示C指针的值放到栈内
+	lua_pushlightuserdata(L, (void*)&key);
+	lua_pushnumber(L, 1); // push value
+	lua_settable(L, LUA_REGISTRYINDEX);
+
+	// 取数字
+	lua_pushlightuserdata(L, (void*)&key); // push address
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	int myNumber = lua_tonumber(L, -1);
+
+	// reference引用系统
+	// 弹出栈顶，以新的数字为key保存到table中，并返回该key
+	int r = luaL_ref(L, LUA_REGISTRYINDEX);
+	// 释放值和reference
+	luaL_unref(L, LUA_REGISTRYINDEX, r);
+	// 以nil调用luaL_ref的话，不会创建新的reference，而是返回一个常量LUA_REFNIL
+	// 而使用lua_rawgeti()就能将nil入栈
+```
+
+不要使用数字作为registry的key，这种类型的key是保留给reference系统使用的。
+
+ ```cpp
+ // C函数实现闭包
+
+ static int counter(lua_State* L) {
+	// lua_upvalueindex用来产生upvalue的假索引
+	double val = lua_tonumber(L, lua_upvalueindex(1));
+	lua_pushnumber(L, ++val);
+
+	// 复制新value，更新upvalue
+	lua_pushvalue(L, -1);
+	lua_replace(L, lua_upvalueindex(1));
+	return 1;
+}
+// newCounter为函数工厂，每次调用都返回一个新counter函数
+int newCounter(lua_State* L) {
+	// 创建新的闭包之前，必须将upvalues的初始值入栈，此处为0
+	lua_pushnumber(L, 0);
+	// 第二个参数是一个基本函数，第三个参数是upvalues的个数
+	lua_pushcclosure(L, &counter, 1);
+	return 1;
+}
+```
+
+## 第28章 User-Defined Types in C
+```cpp
+// Userdata实现，该方式不检查实参类型，不安全
+#include "build_dll/include/lua.hpp"
+
+#define EXTERNC extern "C"
+
+EXTERNC struct myStruct {
+	int size;
+	double value[1];
+};
+
+EXTERNC int newArray(lua_State* L) {
+	int n = luaL_checkinteger(L, 1);
+	// lua_newuserdata用来创建一个userdatum
+	// 它按照指定大小分配一块内存，将对应的userdata放到栈内，并返回内存的地址
+	myStruct* a = (myStruct*)lua_newuserdata(L, (sizeof(myStruct) + (n - 1) * sizeof(double)));
+	a->size = n;
+	return 1;
+}
+
+EXTERNC int setArray(lua_State* L) {
+	myStruct* a = (myStruct*)lua_touserdata(L, 1);
+	int index = luaL_checkinteger(L, 2);
+	double value = luaL_checknumber(L, 3);
+
+	luaL_argcheck(L, a != nullptr, 1, "'array' expected");
+	luaL_argcheck(L, 1 <= index && index <= a->size, 2, "index out of range");
+
+	if (a != nullptr) {
+		a->value[index - 1] = value;
+	}
+	return 0;
+}
+
+EXTERNC int getArray(lua_State* L) {
+	myStruct* a = (myStruct*)lua_touserdata(L, 1);
+	int index = luaL_checkinteger(L, 2);
+
+	luaL_argcheck(L, a != nullptr, 1, "'array' expected");
+	luaL_argcheck(L, 1 < index && index <= a->size, 2, "index out of range");
+
+	lua_pushnumber(L, a->value[index - 1]);
+	return 1;
+}
+
+EXTERNC int getSize(lua_State* L) {
+	myStruct* a = (myStruct*)lua_touserdata(L, 1);
+	luaL_argcheck(L, a != nullptr, 1, "'array' expected");
+	lua_pushnumber(L, a->size);
+	return 1;
+}
+
+EXTERNC __declspec(dllexport)
+int luaopen_dlltest(lua_State* L) {
+	luaL_Reg array[] = {
+		{"new", newArray},
+		{"set", setArray},
+		{"get", getArray},
+		{"size", getSize},
+		{NULL, NULL}
+	};
+	luaL_newlib(L, array);
+
+	return 1;
+}
+```
+
+为userdata创建metatables，可用来规范形参类型。有两种方法保存metatable：注册在registry中，或者在库中作为函数的upvalue
+
