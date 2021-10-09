@@ -2198,3 +2198,210 @@ int luaopen_dlltest(lua_State* L) {
 
 为userdata创建metatables，可用来规范形参类型。有两种方法保存metatable：注册在registry中，或者在库中作为函数的upvalue
 
+```cpp
+#include "build_dll/include/lua.hpp"
+
+#define EXTERNC extern "C"
+
+// 进行类型检查，使array.get(io.stdin, 10)能正常报错
+
+EXTERNC struct myStruct {
+	int size;
+	double value[1];
+};
+
+EXTERNC int newArray(lua_State* L) {
+	int n = luaL_checkinteger(L, 1);
+	// lua_newuserdata用来创建一个userdatum
+	// 它按照指定大小分配一块内存，将对应的userdata放到栈内，并返回内存的地址
+	myStruct* a = (myStruct*)lua_newuserdata(L, (sizeof(myStruct) + (n - 1) * sizeof(double)));
+
+	// 设置数组的metatable
+	// lua_setmetatable函数将出栈，并设立为指定对象的metatable
+	luaL_getmetatable(L, "LuaBook.array");
+	lua_setmetatable(L, -2);
+
+	a->size = n;
+	return 1;
+}
+
+EXTERNC myStruct* checkArray(lua_State* L) {
+	// 检查栈中指定位置的对象是否为带有给定名字的metatable 的usertatum
+	// 如果不存在正确的metatable，返回NULL（或者它不是一个userdata）
+	// 否则返回userdata的地址
+	void* ud = luaL_checkudata(L, 1, "LuaBook.array");
+	luaL_argcheck(L, ud != NULL, 1, "'array' expected");
+	return (myStruct*)ud;
+}
+
+EXTERNC double* getElem(lua_State* L) {
+	myStruct* a = checkArray(L);
+	int index = luaL_checkinteger(L, 2);
+
+	luaL_argcheck(L, 1 <= index && index <= a->size, 2, "index out of range");
+
+	return &a->value[index - 1];
+}
+
+EXTERNC int getArray(lua_State* L) {
+	lua_pushnumber(L, *getElem(L));
+	return 1;
+}
+
+EXTERNC int setArray(lua_State* L) {
+	*getElem(L) = luaL_checknumber(L, 3);
+	return 0;
+}
+
+EXTERNC int getSize(lua_State* L) {
+	myStruct* a = checkArray(L);
+	lua_pushnumber(L, a->size);
+	return 1;
+}
+
+EXTERNC __declspec(dllexport)
+int luaopen_dlltest(lua_State* L) {
+	luaL_Reg array[] = {
+		{"new", newArray},
+		{"set", setArray},
+		{"get", getArray},
+		{"size", getSize},
+		{NULL, NULL}
+	};
+	// 创建新表作为metatable，将新表放到栈顶并建立表与registry中类型名的联系
+	luaL_newmetatable(L, "LuaBook.array");
+	luaL_newlib(L, array);
+
+	return 1;
+}
+```
+
+访问面向对象的数据
+```lua
+--- 通过__index元方法，使用面向对象的语法
+--- lua无法设置userdata的metatable，但是可以访问metatable
+metaarray = getmetatable(array.new(1))
+metaarray.__index = metaarray
+metaarray.set = array.set
+metaarray.get = array.get
+metaarray.size = array.size
+
+a = array.new(1000)
+--- 等价于 a.size(a)
+print(a:size()) --> 1000
+a:set(10, 3.4)
+print(a:get(10)) --> 3.4
+
+--- 定义元方法后可访问数组元素
+metaarray.__index = array.get
+metaarray.__newindex = array.set
+print(a[10]) --> 3.4
+a[10] = 3
+```
+``` cpp
+// 用C实现将方法封装在元表内，对外只开放new接口
+
+#include "build_dll/include/lua.hpp"
+
+#define EXTERNC extern "C"
+
+// 进行类型检查，使array.get(io.stdin, 10)能正常报错
+
+EXTERNC struct myStruct {
+	int size;
+	double value[1];
+};
+
+EXTERNC int newArray(lua_State* L) {
+	int n = luaL_checkinteger(L, 1);
+	// lua_newuserdata用来创建一个userdatum
+	// 它按照指定大小分配一块内存，将对应的userdata放到栈内，并返回内存的地址
+	myStruct* a = (myStruct*)lua_newuserdata(L, (sizeof(myStruct) + (n - 1) * sizeof(double)));
+
+	// 设置数组的metatable
+	// lua_setmetatable函数将出栈，并设立为指定对象的metatable
+	luaL_getmetatable(L, "LuaBook.array");
+	lua_setmetatable(L, -2);
+
+	a->size = n;
+	return 1;
+}
+
+EXTERNC myStruct* checkArray(lua_State* L) {
+	// 检查栈中指定位置的对象是否为带有给定名字的metatable 的usertatum
+	// 如果不存在正确的metatable，返回NULL（或者它不是一个userdata）
+	// 否则返回userdata的地址
+	void* ud = luaL_checkudata(L, 1, "LuaBook.array");
+	luaL_argcheck(L, ud != NULL, 1, "'array' expected");
+	return (myStruct*)ud;
+}
+
+EXTERNC double* getElem(lua_State* L) {
+	myStruct* a = checkArray(L);
+	int index = luaL_checkinteger(L, 2);
+
+	luaL_argcheck(L, 1 <= index && index <= a->size, 2, "index out of range");
+
+	return &a->value[index - 1];
+}
+
+EXTERNC int getArray(lua_State* L) {
+	lua_pushnumber(L, *getElem(L));
+	return 1;
+}
+
+EXTERNC int setArray(lua_State* L) {
+	*getElem(L) = luaL_checknumber(L, 3);
+	return 0;
+}
+
+EXTERNC int getSize(lua_State* L) {
+	myStruct* a = checkArray(L);
+	lua_pushnumber(L, a->size);
+	return 1;
+}
+
+EXTERNC int arrayToString(lua_State* L) {
+	myStruct* a = checkArray(L);
+	lua_pushfstring(L, "array(%d)", a->size);
+	return 1;
+}
+
+EXTERNC __declspec(dllexport)
+int luaopen_dlltest(lua_State* L) {
+	luaL_Reg arraylib_f[] = {
+		{"new", newArray},
+		{NULL, NULL}
+	};
+	luaL_Reg arraylib_m[] = {
+		{"__tostring", arrayToString},
+		{"set", setArray},
+		{"get", getArray},
+		{"size", getSize},
+		{NULL, NULL}
+	};
+	// 创建新表作为metatable，将新表放到栈顶并建立表与registry中类型名的联系
+	luaL_newmetatable(L, "LuaBook.array");
+
+	// 将数组l中的所有函数注册到栈顶的表中
+	// 若nup不为零，所有的函数共享nup个upvalue。这些upvalue必须在调用之前压在表上，在注册完毕时弹出
+	luaL_setfuncs(L, arraylib_m, 0);
+
+	lua_pushstring(L, "__index");
+	lua_pushvalue(L, -2); // pushes the metatable
+	lua_settable(L, -3); // metatable.__index = metatable
+
+	luaL_newlib(L, arraylib_f);
+
+	return 1;
+}
+```
+
+也可以在C代码中注册元方法实现 `metaarray.__index = metaarray`
+
+上述userdata称为full userdata，Lua还提供了另一种userdata：light userdata。light userdatum的类型为void*。light userdata不是一个缓冲区，只是一个指针，没有metatables，也不需要垃圾收集器来管理。对于light userdata的使用有以下要点
+- 使用light userdata必须自己管理内存，因为不需要垃圾管理器来管理
+- light userdata真正的用处在于可以表示不同类型的对象，可以指向任何类型的userdata
+
+## 第29章 资源管理
+当一个对象成为垃圾并被收集时，相关的资源也应该被释放。一些语言用finalizer（析构器）来实现。Lua以_gc元方法的方式提供了finalizers。这个元方法只对userdata类型的值有效。当一个userdatum被收集时，会调用__gc域的值（是以userdatum为参数的函数）。该函数负责释放与userdatum相关的所有资源
