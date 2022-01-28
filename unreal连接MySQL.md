@@ -13,7 +13,7 @@ mysql 源码编译
 
 ## 一、静态库链接
 复制mysql源码里的lib文件夹，include文件夹到Source/TestPlugin文件夹下(图路径查找的方便，就放在Build.cs文件同目录下)，文件目录如图
-![文件目录](unreal连接MySQL-1.png)
+![文件目录](Picture/unreal连接MySQL/unreal连接MySQL-1.png)
 打开TestPlugin.Build.cs文件，添加如下
 ```cs
 // Copyright Epic Games, Inc. All Rights Reserved.
@@ -105,8 +105,8 @@ bool UMyBlueprintFunctionLibrary::TestMySQL()
 ```
 
 最后编译，打开关卡蓝图进行编写测试
-![蓝图](unreal连接MySQL-2.png)
-![测试结果](unreal连接MySQL-3.png)
+![蓝图](Picture/unreal连接MySQL/unreal连接MySQL-2.png)
+![测试结果](Picture/unreal连接MySQL/unreal连接MySQL-3.png)
 
 ### 关于UE4与windows系统的冲突
 [UE4之windows.h冲突](https://blog.51cto.com/u_12701820/3032456)
