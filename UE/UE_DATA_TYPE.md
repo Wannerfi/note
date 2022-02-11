@@ -95,10 +95,6 @@ WriteIndex用于记录剩下的所有元素个数。从RunStartIndex到ReadIndex
 ![TArray_14](..\Picture\UE\UE_DATA_TYPE\TArray_14.png)
 
 #### 重写operator new
-
 ![TArray_17](..\Picture\UE\UE_DATA_TYPE\TArray_17.png)
 
-
-
-其他就一些`MemoryImage`，`Implicit heaps` 的操作，后者基本是通过调用`Algo` 和`AlgoImpl`实现的，就不展开介绍了。
-
+其他就一些`MemoryImage`，`Implicit heaps` 的操作，后者是一些堆操作，基本是通过调用`Algo` 和`AlgoImpl`实现的，就不展开介绍了。
