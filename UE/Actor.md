@@ -1,7 +1,7 @@
 [toc]
 
 # 参考
-[Actors](https://docs.unrealengine.com/4.27/zh-CN/ProgrammingAndScripting/ProgrammingWithCPP/UnrealArchitecture/Actors/)
+[Actors官方说明](https://docs.unrealengine.com/4.27/zh-CN/ProgrammingAndScripting/ProgrammingWithCPP/UnrealArchitecture/Actors/)
 UE4.26.2 源码
 # Actor文档
 ## 定义
@@ -121,7 +121,85 @@ Actor通常不会被垃圾回收，因为场景对象保存一个Actor引用的�
 - IsReadyForFinishDestroy - 调用此函数以确定对象是否可被永久解除分配。
 - FinishDestroy - 销毁对象。
 
-
-
 # Actor源码
+文件开始定义了枚举类，枚举了Actor初始化时更新重叠状态的方法，目前只在关卡流送中使用
+```cpp
+UENUM(BlueprintType)
+enum class EActorUpdateOverlapsMethod : uint8
+{
+	UseConfigDefault,	// Use the default value specified by the native class or config value.
+	AlwaysUpdate,		// Always update overlap state on initialization.
+	OnlyUpdateMovable,	// Only update if root component has Movable mobility.
+	NeverUpdate			// Never update overlap state on initialization.
+};
+```
+然后是一系列委托，根据命名大体可这样划分
+- 受到Actor伤害
+- 与Actor 重叠、碰撞
+- 光标重叠、点击
+- Touch事件
+- 当前Actor的Destroyed，EndPlay
 
+> Actor是能在关卡中放置或生成的基础对象。它可以包含ActorComponents的集合，用来控制Actor的移动、渲染等。Actor的另一个主要功能是能在运行时通过网络进行属性复制和函数调用。
+
+一堆网络相关的略过
+
+这里给出部分成员变量，以了解Actor类的功能。
+| 变量 | 含义 |
+|--|--|
+| TEnumAsByte\<EAutoReceiveInput::Type> AutoReceiveInput | 选择接受玩家的输入（Player0, Player1...） |
+| class UInputComponent* InputComponent | 处理输入的组件 |
+| TArray<AActor*> Children | 当前Actor所拥有的的所有子Actor，这些子Actor不一定是通过UChildActorComponent生成 |
+| USceneComponent* RootComponent | 定义当前Actor在世界中的变换（位置、旋转、缩放）的组件。所有其它组件必须以某种方式附加到该组件 |
+| TWeakObjectPtr<UChildActorComponent> ParentComponent | 拥有当前Actor的UChildActorComponent |
+| TArray<FName> Tags | 标签 |
+| APawn* Instigator | 当前Actor产生伤害或其他 gameplay events 的Pawn代表。假如一个玩家拿枪伤害另一个玩家，则Instigator 表示子弹 |
+
+
+
+## 介绍部分函数
+### OnSubobjectCreatedFromReplication
+当通过复制动态创建子对象时，该函数会被调用
+```cpp
+virtual void OnSubobjectCreatedFromReplication(UObject *NewSubobject);
+
+void AActor::OnSubobjectCreatedFromReplication(UObject *NewSubobject)
+{
+	check(NewSubobject);
+	if ( UActorComponent * Component = Cast<UActorComponent>(NewSubobject) )
+	{
+		Component->RegisterComponent();
+		Component->SetIsReplicated(true);
+	}
+}
+```
+
+### EnableInput
+应用玩家输入的处理也是转发给PlayerController 去处理的。
+```cpp
+virtual void EnableInput(class APlayerController* PlayerController);
+```
+其中会用到输入组件。
+```cpp
+if (!InputComponent)
+{
+	InputComponent = NewObject<UInputComponent>(this, UInputSettings::GetDefaultInputComponentClass());
+	InputComponent->RegisterComponent();
+	InputComponent->bBlockInput = bBlockInput;
+	InputComponent->Priority = InputPriority;
+
+	UInputDelegateBinding::BindInputDelegates(GetClass(), InputComponent);
+}
+```
+
+### 
+
+
+## 功能
+下面列举Actor所包含的功能：
+- 网络复制
+- 处理输入
+- 
+
+
+==========================Actor.h:933行========================
