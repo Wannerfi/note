@@ -121,19 +121,8 @@ Actor通常不会被垃圾回收，因为场景对象保存一个Actor引用的�
 - IsReadyForFinishDestroy - 调用此函数以确定对象是否可被永久解除分配。
 - FinishDestroy - 销毁对象。
 
-# Actor源码
-文件开始定义了枚举类，枚举了Actor初始化时更新重叠状态的方法，目前只在关卡流送中使用
-```cpp
-UENUM(BlueprintType)
-enum class EActorUpdateOverlapsMethod : uint8
-{
-	UseConfigDefault,	// Use the default value specified by the native class or config value.
-	AlwaysUpdate,		// Always update overlap state on initialization.
-	OnlyUpdateMovable,	// Only update if root component has Movable mobility.
-	NeverUpdate			// Never update overlap state on initialization.
-};
-```
-然后是一系列委托，根据命名大体可这样划分
+# Actor源码（略过网络相关）
+Actor定义之前有一系列委托，根据命名大体可这样划分
 - 受到Actor伤害
 - 与Actor 重叠、碰撞
 - 光标重叠、点击
@@ -142,11 +131,13 @@ enum class EActorUpdateOverlapsMethod : uint8
 
 > Actor是能在关卡中放置或生成的基础对象。它可以包含ActorComponents的集合，用来控制Actor的移动、渲染等。Actor的另一个主要功能是能在运行时通过网络进行属性复制和函数调用。
 
-一堆网络相关的略过
+Transform相关的都是跑到RootComponent去执行，包括前向向量，速度等。
 
-这里给出部分成员变量，以了解Actor类的功能。
+
+## 部分成员变量
 | 变量 | 含义 |
 |--|--|
+| struct FActorTickFunction PrimaryActorTick | 基本Tick，被TickActor()调用 |
 | TEnumAsByte\<EAutoReceiveInput::Type> AutoReceiveInput | 选择接受玩家的输入（Player0, Player1...） |
 | class UInputComponent* InputComponent | 处理输入的组件 |
 | TArray<AActor*> Children | 当前Actor所拥有的的所有子Actor，这些子Actor不一定是通过UChildActorComponent生成 |
@@ -157,12 +148,10 @@ enum class EActorUpdateOverlapsMethod : uint8
 
 
 
-## 介绍部分函数
+## 部分函数
 ### OnSubobjectCreatedFromReplication
-当通过复制动态创建子对象时，该函数会被调用
+当通过复制动态创建子对象时，该函数会被调用。这里组件创建出来后会先被注册
 ```cpp
-virtual void OnSubobjectCreatedFromReplication(UObject *NewSubobject);
-
 void AActor::OnSubobjectCreatedFromReplication(UObject *NewSubobject)
 {
 	check(NewSubobject);
@@ -175,31 +164,89 @@ void AActor::OnSubobjectCreatedFromReplication(UObject *NewSubobject)
 ```
 
 ### EnableInput
-应用玩家输入的处理也是转发给PlayerController 去处理的。
+应用玩家输入的处理也是转发给PlayerController 去处理的。这里截取片段，其中会用到输入组件。
 ```cpp
-virtual void EnableInput(class APlayerController* PlayerController);
-```
-其中会用到输入组件。
-```cpp
-if (!InputComponent)
-{
-	InputComponent = NewObject<UInputComponent>(this, UInputSettings::GetDefaultInputComponentClass());
-	InputComponent->RegisterComponent();
-	InputComponent->bBlockInput = bBlockInput;
-	InputComponent->Priority = InputPriority;
+virtual void EnableInput(class APlayerController* PlayerController) {
+	// ...
+	if (!InputComponent)
+	{
+		InputComponent = NewObject<UInputComponent>(this, UInputSettings::GetDefaultInputComponentClass());
+		InputComponent->RegisterComponent();
+		InputComponent->bBlockInput = bBlockInput;
+		InputComponent->Priority = InputPriority;
 
-	UInputDelegateBinding::BindInputDelegates(GetClass(), InputComponent);
+		UInputDelegateBinding::BindInputDelegates(GetClass(), InputComponent);
+	}
+	//...
 }
 ```
 
-### 
+### ActorToWorld
+场景上的变换是跟RootComponent（即SceneComponent）相关的，
+```cpp
+FORCEINLINE const FTransform& ActorToWorld() const
+{
+	return (RootComponent ? RootComponent->GetComponentTransform() : FTransform::Identity);
+}
+```
 
+## AddComponent
+该函数是在`ActorConstruction.cpp`中实现的，这里主要说明新组件的安装需要进行的步骤
+```cpp
+UActorComponent* AActor::AddComponent(...)
+{
+	FinishAddComponent();
+}
+void AActor::FinishAddComponent(...)
+{
+	//...
+	NewSceneComp->SetupAttachment(RootComponent);
+	//...
+	NewSceneComp->SetRelativeTransform(RelativeTransform);
+	//...
+	NewActorComp->RegisterComponent();
+	// 后续更新世界中被该组件体积影响的其他数据
+}
+```
 
-## 功能
-下面列举Actor所包含的功能：
-- 网络复制
-- 处理输入
-- 
+## BeginPlay
+组件中的BeginPlay是在Actor的蓝图BeginPlay之前，该函数是受保护的，可以在c++中使用`DispatchBeginPlay()`以正确的顺序执行Begin。注意和`PostActorCreated`区分
+```cpp
+void AActor::BeginPlay()
+{
+	//...
+	RegisterAllActorTickFunctions(true, false); // Components are done below.
+	//...
+	for (UActorComponent* Component : Components)
+	{
+		if (Component->IsRegistered() && !Component->HasBegunPlay())
+		{
+			Component->RegisterAllComponentTickFunctions(true);
+			Component->BeginPlay();
+		}
+	}
+	//...
+	ReceiveBeginPlay(); // 蓝图中的 BeginPlay
+}
+```
 
+## GetParentActor
+该函数表示的应该是Actor的嵌套关系，组件`UChildActorComponent`能创建子Actor
+```cpp
+AActor* AActor::GetParentActor() const
+{
+	AActor* ParentActor = nullptr;
+	if (UChildActorComponent* ParentComponentPtr = GetParentComponent())
+	{
+		ParentActor = ParentComponentPtr->GetOwner();
+	}
 
-==========================Actor.h:933行========================
+	return ParentActor;
+}
+```
+
+# 疑惑
+- 对Actor的Begin的过程不了解
+- GetParentActor(), IsAttached() 是能实现Actor 的嵌套吗
+
+=========================Actor.h: 2579=================
