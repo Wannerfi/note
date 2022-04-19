@@ -68,6 +68,8 @@ end
 使用任务队列保存将执行的添加或移除任务，在每帧tick中取出任务并尝试进行任务，任务成功完成时便移除任务。
 这种任务队列的方式加上通知回调机制，还能支持在打开背包界面时动态添加格子。
 关于传参的问题，在任务的描述格式中添加param 参数，保存一个表，用来表示可能需要用到的参数
+**补充**
+实际上预加载后，保留res的话可以在需要的时候实例化格子！
 
 ## 背包添加格子失败的问题
 **问题描述**
@@ -128,15 +130,6 @@ touch事件
 > 自定义controller类并应用，设置controller类中的Mouse Interface，开启Enable Touch Events。然后打开项目设置，在input中找到Use Mouse for Touch，这个设置很重要！该设置将鼠标事件变成touch，即没有clicked事件，是touch事件！之后就可以添加对应物品的touch事件了。
 要注意的是，就算开启touch事件，UI的点击事件与场景中的物品的touch事件不冲突！甚至重叠的情况下UI的点击事件和touch事件都可以触发！
 
-# C++问题
-
-## 关于error LNK2019: 无法解析的外部符号 "__declspec(dllimport) private: static class UClass * __cdecl
-**解决**
-这问题一看就是dll库没有链接好，我是cs文件中忘了添加相关模块。
-有人是`Intermedidate`文件没有更新，删了重新编译就好，这种盲猜是改了命名。
-[Unreal Engine 4 开发中遇到的部分问题](https://www.codeleading.com/article/55071278553/)
-[GetPrivateStaticClass()](https://forums.unrealengine.com/t/getprivatestaticclass-unresolved-external-between-modules/410842)
-
 ## 滑动列表的格子在特定参数的情况下显示不全
 **问题描述**
 当格子的宽高占画布的大小的一半以上时，只创建两个格子后第二个格子会滑不上来
@@ -149,6 +142,15 @@ touch事件
 由于不知道之前的计算方法有没有处于什么别的考量，所以暂未解决，总之要不就是更新画布大小的判断错了，要不就是初始化画布能装下的格子数量错了，导致画布大小没有更新
 **补充**
 已由大佬解决
+
+# C++问题
+
+## 关于error LNK2019: 无法解析的外部符号 "__declspec(dllimport) private: static class UClass * __cdecl
+**解决**
+这问题一看就是dll库没有链接好，我是cs文件中忘了添加相关模块。
+有人是`Intermedidate`文件没有更新，删了重新编译就好，这种盲猜是改了命名。
+[Unreal Engine 4 开发中遇到的部分问题](https://www.codeleading.com/article/55071278553/)
+[GetPrivateStaticClass()](https://forums.unrealengine.com/t/getprivatestaticclass-unresolved-external-between-modules/410842)
 
 # 未解决问题
 

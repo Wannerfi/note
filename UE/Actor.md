@@ -2,7 +2,8 @@
 
 # 参考
 [Actors官方说明](https://docs.unrealengine.com/4.27/zh-CN/ProgrammingAndScripting/ProgrammingWithCPP/UnrealArchitecture/Actors/)
-UE4.26.2 源码
+UE4.26.2 源码，略过网络复制
+
 # Actor文档
 ## 定义
 所有可以放入关卡的对象都是Actor。这个定义很重要！
@@ -71,7 +72,7 @@ TG_PosUpdateWork
 
 **play in editor**
 
-该路径的Actor是从编辑器复制来的
+该路径的Actor是从编辑器复制来的！
 
 - 编辑器中的Actor被复制到新场景中
 - PostDuplicate 被调用
@@ -121,7 +122,7 @@ Actor通常不会被垃圾回收，因为场景对象保存一个Actor引用的�
 - IsReadyForFinishDestroy - 调用此函数以确定对象是否可被永久解除分配。
 - FinishDestroy - 销毁对象。
 
-# Actor源码（略过网络相关）
+# Actor
 Actor定义之前有一系列委托，根据命名大体可这样划分
 - 受到Actor伤害
 - 与Actor 重叠、碰撞
@@ -137,7 +138,7 @@ Transform相关的都是跑到RootComponent去执行，包括前向向量，速�
 ## 部分成员变量
 | 变量 | 含义 |
 |--|--|
-| struct FActorTickFunction PrimaryActorTick | 基本Tick，被TickActor()调用 |
+| struct FActorTickFunction PrimaryActorTick | 主要的Tick数据结构，被TickActor()调用 |
 | TEnumAsByte\<EAutoReceiveInput::Type> AutoReceiveInput | 选择接受玩家的输入（Player0, Player1...） |
 | class UInputComponent* InputComponent | 处理输入的组件 |
 | TArray<AActor*> Children | 当前Actor所拥有的的所有子Actor，这些子Actor不一定是通过UChildActorComponent生成 |
@@ -149,6 +150,14 @@ Transform相关的都是跑到RootComponent去执行，包括前向向量，速�
 
 
 ## 部分函数
+### IsAsset()
+Actor的子类不是资产，相关资产部分参考[资产管理](https://docs.unrealengine.com/4.27/zh-CN/ProductionPipelines/AssetManagement/)
+```cpp
+bool AActor::IsAsset() const
+{
+	return IsPackageExternal() && !IsChildActor() && !HasAnyFlags(RF_Transient | RF_ClassDefaultObject);
+}
+```
 ### OnSubobjectCreatedFromReplication
 当通过复制动态创建子对象时，该函数会被调用。这里组件创建出来后会先被注册
 ```cpp
@@ -190,7 +199,7 @@ FORCEINLINE const FTransform& ActorToWorld() const
 }
 ```
 
-## AddComponent
+### AddComponent
 该函数是在`ActorConstruction.cpp`中实现的，这里主要说明新组件的安装需要进行的步骤
 ```cpp
 UActorComponent* AActor::AddComponent(...)
@@ -209,8 +218,8 @@ void AActor::FinishAddComponent(...)
 }
 ```
 
-## BeginPlay
-组件中的BeginPlay是在Actor的蓝图BeginPlay之前，该函数是受保护的，可以在c++中使用`DispatchBeginPlay()`以正确的顺序执行Begin。注意和`PostActorCreated`区分
+### BeginPlay
+组件中的BeginPlay是在Actor的蓝图BeginPlay之前，该函数是受保护的，`DispatchBeginPlay()`则以正确的顺序执行Begin。
 ```cpp
 void AActor::BeginPlay()
 {
@@ -230,8 +239,8 @@ void AActor::BeginPlay()
 }
 ```
 
-## GetParentActor
-该函数表示的应该是Actor的嵌套关系，组件`UChildActorComponent`能创建子Actor
+### GetParentActor
+该函数表示的应该是Actor的嵌套关系，通过组件实现Actor的间接嵌套。
 ```cpp
 AActor* AActor::GetParentActor() const
 {
@@ -245,8 +254,88 @@ AActor* AActor::GetParentActor() const
 }
 ```
 
-# 疑惑
-- 对Actor的Begin的过程不了解
-- GetParentActor(), IsAttached() 是能实现Actor 的嵌套吗
+### GetWorld
+如果actor不在level中则为null
+```cpp
+UWorld* AActor::GetWorld() const
+{
+	// CDO objects do not belong to a world
+	// If the actors outer is destroyed or unreachable we are shutting down and the world should be nullptr
+	if (!HasAnyFlags(RF_ClassDefaultObject) && ensureMsgf(GetOuter(), TEXT("Actor: %s has a null OuterPrivate in AActor::GetWorld()"), *GetFullName())
+		&& !GetOuter()->HasAnyFlags(RF_BeginDestroyed) && !GetOuter()->IsUnreachable())
+	{
+		if (ULevel* Level = GetLevel())
+		{
+			return Level->OwningWorld;
+		}
+	}
+	return nullptr;
+}
+```
 
-=========================Actor.h: 2579=================
+# 疑惑
+- AttachToActor()，GetParentActor() 是能实现Actor 的嵌套吗
+- Script Construction 是怎么用的，蓝图中也有
+- 如何动态给Actor添加组件
+
+# 解答
+## AttachToActor()，GetParentActor() 是能实现Actor 的嵌套吗
+Actor无法直接嵌套。
+看`AttachToActor`实现，本质上是RootComponent 的嵌套。在蓝图中可以调用函数`AttachActorToActor`，传参都是ParentActor，SocketName和一些Rule。
+```cpp
+void AActor::AttachToActor(AActor* ParentActor, const FAttachmentTransformRules& AttachmentRules, FName SocketName)
+{
+	if (RootComponent && ParentActor)
+	{
+		USceneComponent* ParentDefaultAttachComponent = ParentActor->GetDefaultAttachComponent();
+		if (ParentDefaultAttachComponent)
+		{
+			RootComponent->AttachToComponent(ParentDefaultAttachComponent, AttachmentRules, SocketName);
+		}
+	}
+}
+```
+
+对于GetParentActor，可以看到是检查组件`UChildActorComponent`(源码在函数介绍中)，此处转蓝图容易理解，在蓝图使用组件`ChildActorComponent`，可以通过该组件实现Actor 的间接嵌套，然后在Child Actor上调用该函数获取Parent Actor。
+
+## Script Construction 是怎么用的，蓝图中也有
+[构造脚本](https://docs.unrealengine.com/4.27/zh-CN/ProgrammingAndScripting/Blueprints/UserGuide/UserConstructionScript/)
+[1.4-构造脚本](https://docs.unrealengine.com/4.26/zh-CN/Resources/ContentExamples/Blueprints/1_4/)
+构造脚本适合处理需要在游戏开始前计算的内容。游戏开始后构造脚本将停止执行。此时构造脚本执行的所有内容都将视为完成。
+构造脚本用来在创建组件之后，执行一些设置或者计算。
+在商城中可获取“蓝图”项目官方模板，查看里面样例。
+
+## 如何动态给Actor添加组件
+给第三人称模板的Character加个Sphere吧。
+MyProjectCharacter.h
+```cpp
+	UFUNCTION(BlueprintCallable)
+	void TestAddComponent();
+	// 设成UPROPERTY，反射在UE编辑器中可见，方便调试
+	// 换成函数内的局部变量，不影响结果，但是在UE编辑器中不可见
+	UPROPERTY(VisibleAnywhere)
+	UStaticMeshComponent* StaticMesh;
+```
+MyProjectCharacter.cpp
+```cpp
+void AMyProjectCharacter::TestAddComponent()
+{
+	StaticMesh = NewObject<UStaticMeshComponent>(this, "AddComponentInRuntime");
+	this->AddOwnedComponent(StaticMesh);
+	// 检查Component
+	
+	StaticMesh->RegisterComponent();
+	StaticMesh->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	StaticMesh->SetRelativeLocation(FVector(0.0f, 0.0f, 50.0f));
+
+	// 添加Sphere
+	FString AssetRef = "/Game/StarterContent/Shapes/Shape_Sphere.Shape_Sphere";
+	UStaticMesh* Sphere = LoadObject<UStaticMesh>(this, *AssetRef);
+	StaticMesh->SetStaticMesh(Sphere);
+}
+```
+之后在蓝图中设置按键调用就好。
+**tips**
+有的网上教程对`AddOwnedComponent`有争议，这里打断点查看该函数的影响。
+当不执行该函数时，查看this 堆栈，可以看到`OwnedComponents`是存在该组件的，但是`ReplicatedComponents`中不存在该组件，而该函数其中有一项就是往`ReplicatedComponents`里面添加组件，所以最好还是习惯性添加该函数
+![](./Actor/1.png)
