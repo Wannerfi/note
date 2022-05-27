@@ -36,7 +36,7 @@ UE4编译器默认不支持使用`debug`版本的第三方库。（默认选项�
 
 ## 编写插件
 先写个简单插件，熟练的同学直接在文件管理器里面构建文件层次，从头编写文件，不熟练的打开ue编辑器，Edit->Plugins->New Plugin->Blank建空插件，我这里命名为TestProtobuf。建完先跑一下，跑通就ok
-![UnrealEngine杂记-文件层次](Picture/UnrealEngine杂记-文件层次.png)
+![UnrealEngine杂记-文件层次](../Picture/UnrealEngine杂记-文件层次.png)
 
 在Public文件夹下新建文件夹Include，Library（图方便，建哪里都ok），里面丢相应的东西
 

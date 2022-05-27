@@ -350,6 +350,6 @@ FSelectedActorInfo BuildSelectedActorInfo( const TArray<AActor*>& SelectedActors
 }
 ```
 
-## 个人总结，个人！
+## 个人总结
 已知Actor 类能产生蓝图类资产。在用插件创建自定义的资源时，要清楚创建的是实例！而不是类，在判断为实例后，就会判断actor所属的World，但是Actor所属的World为空，这就出现一系列问题了。
 所以 Actor的实例应该是放在关卡中的，序列化进相关的asset中，无法剥离出来单独存在于asset中。

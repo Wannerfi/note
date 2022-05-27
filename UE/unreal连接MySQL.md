@@ -105,8 +105,8 @@ bool UMyBlueprintFunctionLibrary::TestMySQL()
 ```
 
 最后编译，打开关卡蓝图进行编写测试
-![蓝图](Picture/unreal连接MySQL/unreal连接MySQL-2.png)
-![测试结果](Picture/unreal连接MySQL/unreal连接MySQL-3.png)
+![蓝图](../Picture/unreal连接MySQL/unreal连接MySQL-2.png)
+![测试结果](../Picture/unreal连接MySQL/unreal连接MySQL-3.png)
 
 ### 关于UE4与windows系统的冲突
 [UE4之windows.h冲突](https://blog.51cto.com/u_12701820/3032456)
