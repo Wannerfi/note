@@ -238,6 +238,21 @@ ScrollBox 嵌套 SizeBox，用SizeBox撑开滑动列表实现可上下滑动。
 [Unreal Engine 4 开发中遇到的部分问题](https://www.codeleading.com/article/55071278553/)
 [GetPrivateStaticClass()](https://forums.unrealengine.com/t/getprivatestaticclass-unresolved-external-between-modules/410842)
 
+## 使用 std::enable_shared_from_this 抛出 bad_weak_ptr 错误
+**问题描述**
+在引入c++ asio库使用的时候，运行到 shared_from_this() 会引出 bad_weak_ptr 错误，实际上这个错误被标上 noreturn，最后是在打断点 step into 才看到的。。。
+```cpp
+[[noreturn]] inline void _Throw_bad_weak_ptr() {
+    _THROW(bad_weak_ptr{});
+}
+```
+
+**产生原因**
+参照 [bad_weak_ptr的原因](https://blog.csdn.net/yockie/article/details/40213331)，原因是混用了标准库和ue库的智能指针。标准库用的 `std::enable_shared_from_this`，而创建对象时使用的ue库的`MakeShared`，导致`shared_from_this`无法使用，即要使用`shared_from_this`，除了继承`std::enable_shared_from_this`还要`std::make_shared`
+
+**解决**
+将ue的智能指针转换成标准库的智能指针就好了
+
 # 未解决问题
 
 ## 药品点击事件异常
