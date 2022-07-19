@@ -184,45 +184,45 @@ void AGameAbilityTestCharacter::OnHealthChangedInternal(const FOnAttributeChange
 # 关联属性表
 启动游戏，在文件管理框里右键选择 Miscellaneous -> DataTable -> AttributeMetaData，创建属性表。
 RowName的规则为ClassName.AttributeName，这里的ClassName忽略前缀，如图例子的ClassName为UGameAbilityTestAttributeSet。该表好像只有 BaseValue 有用？
-![创建属性表](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-1.png)
+![创建属性表](UnrealEngineGAS系统/UnrealEngineGAS系统-1.png)
 打开人物蓝图，先查看蓝图的父类是否为自己编写的类，点击ClassSettings，检查ParentClass。父类正确后如图单击Ability System Component的details中关联属性表
-![关联属性表](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-2.png)
+![关联属性表](UnrealEngineGAS系统/UnrealEngineGAS系统-2.png)
 此时编写蓝图，可以在 tick 中 GetHealth 查看属性配置是否正确
 
 # 设置UI
 设置UI是为了更好地观察生命值的变化。在代码中已经将生命值属性的变化绑定到 OnHealthChangedInternal 函数上，OnHealthChangedInternal 函数调用了OnHealthChanged，所以只要在蓝图中将 OnHealthChanged 函数调用与UI更新绑定即可实时更新生命值栏
 下图为 Character 蓝图的编写
-![OnHealthChanged实现](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-3.png)
+![OnHealthChanged实现](UnrealEngineGAS系统/UnrealEngineGAS系统-3.png)
 如下图，绘制UI并编写蓝图将生命值变化与UI更新绑定，实现生命值一变化就改变UI。需要注意的是进度条应该初始化为 100%
-![UI界面](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-4.png)
-![UI绑定生命值](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-5.png)
+![UI界面](UnrealEngineGAS系统/UnrealEngineGAS系统-4.png)
+![UI绑定生命值](UnrealEngineGAS系统/UnrealEngineGAS系统-5.png)
 最后将UI显示在界面上即可，具体查看[UMG教程](https://docs.unrealengine.com/4.27/zh-CN/InteractiveExperiences/UMG/QuickStart/)
 此时启动游戏就能看到表示生命值的条了
 
 # 创建技能任务
 这里使用蓝图创建技能，在文件管理框里面右键 -> Gameplay -> Gameplay Ability Blueprint创建技能蓝图，编写简单技能蓝图，如输出字符串，`确保技能结束时调用 EndAbility`，下图为添加技能效果后的，可忽略部分
-![创建技能](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-6.png)
+![创建技能](UnrealEngineGAS系统/UnrealEngineGAS系统-6.png)
 接下来回到Character的蓝图，规定按下P键释放技能。先在游戏开始时添加技能，然后在按下P键时使用 `Try Activate Ability by Class` ，设置技能蓝图指定激活的技能，如下图。若成功，此时屏幕出现Hello，失败请检查是否enable input
-![添加技能](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-7.png)
+![添加技能](UnrealEngineGAS系统/UnrealEngineGAS系统-7.png)
 
 # 添加技能效果
 Ability Effect 使用纯数据类型即可满足大部分的效果需求。新建蓝图类，继承于GameplayEffect，具体设置看蓝图，例子中实现的效果是，瞬发扣自身 5 点生命值
-![添加技能效果](Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-8.png)
+![添加技能效果](UnrealEngineGAS系统/UnrealEngineGAS系统-8.png)
 参照创建技能任务那一节的图，添加effect。完成后运行游戏测试一下，按P键
-![测试1](Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-9.png)
+![测试1](UnrealEngineGAS系统/UnrealEngineGAS系统-9.png)
 血量在减少的时候会发现血量的变化函数被调用了两次，到血槽为空时这个答案就显现了，原因在于属性的cpp文件中，PostGameplayEffectExecute函数规定了修正的血量的范围，到血槽为空时血量小于0，之后被修正为0。
 
 # 添加技能效果
 关于Cue的具体介绍看参考教程，这里只是拿个举例熟悉一下简单流程。
 新建GameplayCueNotify_Actor蓝图类，Actor类可以创建实例。如图添加一个粒子特效
-![创建粒子特效](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-10.png)
+![创建粒子特效](UnrealEngineGAS系统/UnrealEngineGAS系统-10.png)
 然后打开类默认值，设置cue的标签，并设定为移除后自动销毁和自动跟随目标，这样技能结束时就会销毁cue，在技能持续期间会跟随释放者移动。
-![设置Cue](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-11.png)
+![设置Cue](UnrealEngineGAS系统/UnrealEngineGAS系统-11.png)
 打开effect文件，如图修改技能效果为持续并绑定cue tag
-![修改技能效果1](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-12.png)
-![修改技能效果2](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-13.png)
+![修改技能效果1](UnrealEngineGAS系统/UnrealEngineGAS系统-12.png)
+![修改技能效果2](UnrealEngineGAS系统/UnrealEngineGAS系统-13.png)
 测试效果
-![测试2](../Picture/UnrealEngineGAS系统/UnrealEngineGAS系统-14.png)
+![测试2](UnrealEngineGAS系统/UnrealEngineGAS系统-14.png)
 
 # 小结
 AttributeSet 给人物设置属性，GameplayEffect实现技能效果，Cues和Tag用来提供技能的视觉反馈。GASComponent负责控制Ability，Character内置AttributeSet，从游戏的开始就向GASComponent添加Ability，自定义触发键后，通过GASComponent触发技能，运行GameplayAbility，在Ability里面添加Effect和Cues，完成技能的实现。

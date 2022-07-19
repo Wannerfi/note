@@ -91,25 +91,25 @@ bool AMyProjectCharacter::GetFolderToSaveDatas(FString& OutFolderName)
 }
 ```
 然后在蓝图中调用该函数，设置成按P键调用，开始游戏后调用即可。
-![蓝图调用](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/1.png)
+![蓝图调用](创建uasset文件/1.png)
 
 > 如果过程中报已存在同名资产包，要清空内存中的的资产包（重启不保存）和删除Content中的资产重新实验
 
 ## 尝试将Character实例存为uasset
 
 有了样例之后，在创建实例那里修改就行。将`UMyObject`全部修改成`ACharacter`，然后运行游戏按P，会发现此时并没有保存package，然后进一步点击`Save all`，会发现刚刚创建的package存在，但是是`Empty Package`！此时就算点保存也是不会产生uasset的！下面用断点调试查找原因
-![存为asset](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/2.png)
+![存为asset](创建uasset文件/2.png)
 跑到后面发现这个if判断没有进来
-![ensure判断](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/3.png)
+![ensure判断](创建uasset文件/3.png)
 回到Actor中可以发现一个Actor可以成为资产的判断
-![Actor资产判断](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/4.png)
+![Actor资产判断](创建uasset文件/4.png)
 
 所以对一个对象可否产生资产可以利用该接口进行判断，已知Actor的子对象是不行的，回顾[资产管理](https://docs.unrealengine.com/4.27/zh-CN/ProductionPipelines/AssetManagement/)，会发现UE将资产分为两种
 - 蓝图类资产
 - 数据资产（非蓝图资产）
 
 该文档的目的就是创建数据资产，目前发现无法将Character实例单独存为uasset，这里强调一下非蓝图资产的 NOTE
-![NOTE](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/5.png)
+![NOTE](创建uasset文件/5.png)
 
 ## 用插件创建自定义Asset类
 基本步骤
@@ -318,11 +318,11 @@ void FMyPluginEditorModule::ShutdownModule()
 已知Actor 不是Asset，那么自定义资源继承与Actor 会怎么样呢？
 将`UMyCustomObject`的父类改成`AActor`，并将所有的`UMyCustomObject`改为`AMyCustomObject`，debug运行！
 会发现现在居然能在内存上创建`AMyCustomObject`资产！但是进行保存的时候还是为Empty Package！也就是说无法存为asset！
-![save content](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/6.png)
+![save content](创建uasset文件/6.png)
 此时打开`NewMyCustomObject`，程序突然跳到一处check，GetWorld() = NULL
-![debug](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/7.png)
+![debug](创建uasset文件/7.png)
 程序接着走能打开一般的编辑器（Run模式下会直接崩溃关闭）
-![editor](./%E5%88%9B%E5%BB%BAuasset%E6%96%87%E4%BB%B6/8.png)
+![editor](创建uasset文件/8.png)
 
 此时如果新建一个正确Actor 蓝图，会发现覆盖了原来的资产并正确打开蓝图。在报错的地方打断点，重新编译来看看如果新建正确的Actor 蓝图类，会不会走到这里。
 答案是不会！没有进入check之前的if判断！所以自定义的资源也不能继承于Actor。下面为部分关于报错的check的源码

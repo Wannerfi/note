@@ -338,4 +338,4 @@ void AMyProjectCharacter::TestAddComponent()
 **tips**
 有的网上教程对`AddOwnedComponent`有争议，这里打断点查看该函数的影响。
 当不执行该函数时，查看this 堆栈，可以看到`OwnedComponents`是存在该组件的，但是`ReplicatedComponents`中不存在该组件，而该函数其中有一项就是往`ReplicatedComponents`里面添加组件，所以最好还是习惯性添加该函数
-![](./Actor/1.png)
+![](Actor/1.png)

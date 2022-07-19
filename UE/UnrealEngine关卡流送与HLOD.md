@@ -1,3 +1,11 @@
+<!--
+ * @Author: caizehui 905718992@qq.com
+ * @Date: 2022-06-20 23:44:43
+ * @LastEditors: error: git config user.name && git config user.email & please set dead value or install git
+ * @LastEditTime: 2022-07-19 23:58:07
+ * @Description: 
+ * 
+-->
 # UnrealEngine关卡流送与HLOD
 该章学习关卡流送的实现，并开启 HLOD
 
@@ -29,26 +37,26 @@
 ## 搭建关卡
 #### 导入素材
 先新建空项目，带标准素材包，后面做HLOD用。开始后随便丢几个静态网格体进去。再添加第三人称素材包，拉个Character到场景中作为观测者，如图在Character的`details`中设置`possess play` 为 `player 0`。开始游戏后就可以操作人物了。
-![导入素材包](Picture/unreal关卡流送与HLOD-1.png)
-![设置任务](Picture/unreal关卡流送与HLOD-2.png)
+![导入素材包](unreal关卡流送与HLOD/unreal关卡流送与HLOD-1.png)
+![设置任务](unreal关卡流送与HLOD/unreal关卡流送与HLOD-2.png)
 
 #### 添加关卡
 如何添加关卡参照[关于关卡的基本操作](https://docs.unrealengine.com/4.27/zh-CN/BuildingWorlds/LevelStreaming/HowTo/)。
 添加两个空关卡，分别命名为Level1，Level2，同时会产生两个同名的地图（更改地图名即可更改关卡名）。如下图所示
-![添加关卡](Picture/unreal关卡流送与HLOD-3.png)
+![添加关卡](unreal关卡流送与HLOD/unreal关卡流送与HLOD-3.png)
 在关卡界面双击`Persistent Level`将关卡切回固定关卡，添加两块Cube，等下分别放置到两个关卡中，如下图所示。这里加上不同贴图以区分。
-![关卡内容](Picture/unreal关卡流送与HLOD-4.png)
+![关卡内容](unreal关卡流送与HLOD/unreal关卡流送与HLOD-4.png)
 然后在世界窗口单击要移动的cube，在Levels窗口中移动到别的Level去，如下图
-![移动cube](Picture/unreal关卡流送与HLOD-5.png)
+![移动cube](unreal关卡流送与HLOD/unreal关卡流送与HLOD-5.png)
 
 到目前为止关卡就搭建好了。现在点击开始游戏，只能看见固定关卡。
 > 此时打开Level1的map，会看到Levels窗口只有固定关卡，也就是说可以实现关卡的嵌套
 
 ## 自主控制关卡的加载和卸载
 打开关卡蓝图，如下编写脚本，记得打开可视度
-![编写蓝图](Picture/unreal关卡流送与HLOD-6.png)
+![编写蓝图](unreal关卡流送与HLOD/unreal关卡流送与HLOD-6.png)
 运行后就可以看见Level2 关卡被加载了
-![加载Level2](Picture/unreal关卡流送与HLOD-7.png)
+![加载Level2](unreal关卡流送与HLOD/unreal关卡流送与HLOD-7.png)
 
 该功能主要用于配合触发盒子等自主加载/卸载关卡
 
@@ -56,17 +64,17 @@
 删除自主添加的蓝图脚本。因为绑定关卡流送体积后其他流送方法将不会正确工作（可能会触发什么错误？）
 先切换回固定关卡！！！
 选择关卡流送体积盒放置在场景中，并包裹关卡。盒子要比关卡略大，注意Z轴上的要确保视点（摄像机）能进入体积盒。如下图所示
-![选择关卡流送体积盒](Picture/unreal关卡流送与HLOD-8.png)
+![选择关卡流送体积盒](unreal关卡流送与HLOD/unreal关卡流送与HLOD-8.png)
 
 **绑定体积盒与关卡**
 打开关卡细节面板，如图。选择要绑定关卡流放体积盒
-![打开关卡细节面板](../Picture/unreal关卡流送与HLOD-9.png)
-![绑定关卡流放体积盒](../Picture/unreal关卡流送与HLOD-10.png)
+![打开关卡细节面板](unreal关卡流送与HLOD/unreal关卡流送与HLOD-9.png)
+![绑定关卡流放体积盒](unreal关卡流送与HLOD/unreal关卡流送与HLOD-10.png)
 Level2 同样操作，然后运行游戏即可。
 最后摆放如图
-![关卡图示](../Picture/unreal关卡流送与HLOD-11.png)
+![关卡图示](unreal关卡流送与HLOD/unreal关卡流送与HLOD-11.png)
 在Level2，走出Level1
-![场景效果](../Picture/unreal关卡流送与HLOD-12.png)
+![场景效果](unreal关卡流送与HLOD/unreal关卡流送与HLOD-12.png)
 
 ## HLOD
 HLOD跟关卡流送并无关联
@@ -75,13 +83,13 @@ HLOD教程查看官网的就行，不多。这里简单介绍如何开启HLOD
 [HLOD官网教程](https://docs.unrealengine.com/4.27/en-US/BuildingWorlds/HLOD/)
 
 打开world setting，搜索lod并如图打勾
-![开启HLOD](../Picture/unreal关卡流送与HLOD-13.png)
+![开启HLOD](unreal关卡流送与HLOD/unreal关卡流送与HLOD-13.png)
 然后就可以打开HLOD并生成了，关于设置细节查看官方教程
-![点击HLOD](../Picture/unreal关卡流送与HLOD-14.png)
-![生成HLOD](../Picture/unreal关卡流送与HLOD-15.png)
+![点击HLOD](unreal关卡流送与HLOD/unreal关卡流送与HLOD-14.png)
+![生成HLOD](unreal关卡流送与HLOD/unreal关卡流送与HLOD-15.png)
 
 要注意的是，要开启子关卡的HLOD，需要进入子关卡的map，再去设置world setting
 
 对比效果，可以发现白边消失
-![HLOD](../Picture/unreal关卡流送与HLOD-16.png)
-![靠近HLOD后](../Picture/unreal关卡流送与HLOD-17.png)
+![HLOD](unreal关卡流送与HLOD/unreal关卡流送与HLOD-16.png)
+![靠近HLOD后](unreal关卡流送与HLOD/unreal关卡流送与HLOD-17.png)
