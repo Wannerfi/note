@@ -11,13 +11,13 @@
 
 启动插件 `Python Editor Script Plugin`
 新建文件 `init_unreal.py`
-![init_unreal.py文件](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/1.png)
-![虚幻编辑器中的Python路径](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/2.png)
+![init_unreal.py文件](UE使用python进行资源操作监听/1.png)
+![虚幻编辑器中的Python路径](UE使用python进行资源操作监听/2.png)
 
 **自定义文件路径**
 这里我选择自定义路径 `D:\Python`
 然后打开UE编辑器
-![配置自定义路径](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/5.png)
+![配置自定义路径](UE使用python进行资源操作监听/5.png)
 
 > 这里如果勾选开发者模式，则在项目文件夹下的 `Intermediate/PythonStub`里会出现unreal.py文件，建议api参考该文件，官方网址指示的api不完整，比如函数unreal.new_object() 网址上就没有
 
@@ -29,10 +29,10 @@ print('Hello >>>>>>>>>>>>>>')
 ```
 
 编译UE可得到log
-![log](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/3.png)
+![log](UE使用python进行资源操作监听/3.png)
 
 **日志**
-![日志](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/4.png)
+![日志](UE使用python进行资源操作监听/4.png)
 
 # 使用Python监控资源操作
 
@@ -245,9 +245,9 @@ UPythonBridge* UPythonBridge::GetFirstSubclass()
 
 经过漫长调试后，原因很简单！修改Python类 `PythonBridgeImplementation`后，重新编译运行会产生新的子类，而此时单例模式下，该单例指向的地址是旧的！
 这里贴几张不是单例的情况下的debug图，分别是第一次运行程序截图，再次执行脚本截图（不修改），再次执行脚本截图（不修改）
-![调试](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/6.png)
-![调试](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/7.png)
-![调试](./UE%20%E4%BD%BF%E7%94%A8python%E8%BF%9B%E8%A1%8C%E8%B5%84%E6%BA%90%E6%93%8D%E4%BD%9C%E7%9B%91%E5%90%AC/8.png)
+![调试](UE使用python进行资源操作监听/6.png)
+![调试](UE使用python进行资源操作监听/7.png)
+![调试](UE使用python进行资源操作监听/8.png)
 会发现，每次执行新的Python 脚本，不是修改子类 `PythonBridgeImplementation` 的变化内容，而是创建新的子类！而旧的UClass会被销毁！
 
 ## 结论补充

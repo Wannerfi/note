@@ -30,7 +30,7 @@
 * /var variable（变量），放置经常修改的目录，包括各种日志文件
 * /run 临时文件系统，存储系统启动以来的信息
 
-![](../picture/Linux基础-Linux目录树.png)
+![](Linux基础/Linux基础-Linux目录树.png)
 
 
 
